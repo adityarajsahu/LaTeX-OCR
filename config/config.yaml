@@ -1,0 +1,34 @@
+vision_model_name: openai/clip-vit-base-patch32
+language_model_name: EleutherAI/pythia-70m
+projector_hidden_dim: 1024
+freeze_vision_model: true
+freeze_language_model: false
+
+dataset_name: lukbl/LaTeX-OCR-dataset
+val_fraction: 0.02
+test_fraction: 0.02
+max_text_length: 256
+seed: 42
+
+output_dir: outputs
+num_train_epochs: 8
+per_device_train_batch_size: 32
+per_device_eval_batch_size: 32
+gradient_accumulation_steps: 8
+learning_rate: 3.0e-4
+weight_decay: 0.01
+warmup_ratio: 0.03
+lr_scheduler_type: cosine
+logging_steps: 50
+eval_steps: 500
+save_steps: 500
+save_total_limit: 3
+fp16: true
+dataloader_num_workers: 4
+report_to: tensorboard
+
+eval_max_new_tokens: 256
+eval_num_beams: 4
+eval_num_samples_to_dump: 20
+
+hub_repo_id: adityarajsahu/LaTeX-OCR
