@@ -37,5 +37,5 @@ def build_model_config(cfg: Dict[str, Any]) -> LaTeXOCRConfig:
         freeze_language_model = cfg["freeze_language_model"]
     )
 
-def resize_for_added_token(model, tokenizer):
+def resize_for_added_tokens(model, tokenizer):
     model.language_model.resize_token_embeddings(len(tokenizer))
