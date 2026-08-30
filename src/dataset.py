@@ -9,7 +9,7 @@ def load_latex_ocr_splits(dataset_name: str, val_fraction: float = 0.02, test_fr
     train_ds = split1["train"]
     remainder = split1["test"]
     rel_test_fraction = test_fraction / (val_fraction + test_fraction)
-    split2 = remainder.train_test_split(test_size = test_fraction, seed = seed)
+    split2 = remainder.train_test_split(test_size = rel_test_fraction, seed = seed)
 
     return DatasetDict(train = train_ds, validation = split2["train"], test = split2["test"])
 

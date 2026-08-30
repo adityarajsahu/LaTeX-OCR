@@ -1,5 +1,5 @@
 import random
-from typing Any, Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import torch

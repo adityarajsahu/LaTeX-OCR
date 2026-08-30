@@ -49,8 +49,8 @@ def compute_metrics(predictions, references):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type = str, default = "configs/config.yaml")
-    parser.add_argument("--checkpoint", type = str, required = True)
+    parser.add_argument("--config", type = str, default = "config/config.yaml")
+    parser.add_argument("--checkpoint", type = str, default = "outputs/checkpoint-best")
     parser.add_argument("--split", type = str, default = "test", choices = ["validation", "test"])
     parser.add_argument("--batch_size", type = int, default = 16)
     args = parser.parse_args()

@@ -73,7 +73,7 @@ def main():
 
     trainer.train(resume_from_checkpoint = args.resume_from_checkpoint)
 
-    best_dir = os.path.join(cfg["output_dir"], "best")
+    best_dir = os.path.join(cfg["output_dir"], "checkpoint-best")
     trainer.save_model(best_dir)
     tokenizer.save_pretrained(best_dir)
     image_processor.save_pretrained(best_dir)

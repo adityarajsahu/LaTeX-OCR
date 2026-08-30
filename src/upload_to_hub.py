@@ -70,23 +70,24 @@ def main():
     parser.add_argument("--repo-id", type = str, required = True)
     parser.add_argument("--private", type = lambda x: x.lower() == "true", default = False)
     parser.add_argument("--commit_message", type = str, default = "Upload fine-tuned LaTeXOCR")
+    parser.add_argument("--token", type = str, default = os.environ.get("HF_TOKEN", None), help = "Hugging Face access token")
     args = parser.parse_args()
 
     tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
     image_processor = CLIPImageProcessor.from_pretrained(args.checkpoint)
     model = LaTeXOCRModel.from_pretrained(args.checkpoint)
 
-    create_repo(args.repo_id, preivate = args.private, exist_ok = True)
+    create_repo(args.repo_id, private = args.private, exist_ok = True, token = args.token)
 
-    model.push_to_hub(args.repo_id, commit_message = args.commit_message)
-    tokenizer.push_to_hub(args.repo_id, commit_message = args.commit_message)
-    image_processor.push_to_hub(args.repo_id, commit_message = args.commit_message)
+    model.push_to_hub(args.repo_id, commit_message = args.commit_message, token = args.token)
+    tokenizer.push_to_hub(args.repo_id, commit_message = args.commit_message, token = args.token)
+    image_processor.push_to_hub(args.repo_id, commit_message = args.commit_message, token = args.token)
 
     card_path = os.path.join(args.checkpoint, "README.md")
     with open(card_path, "w") as f:
         f.write(MODEL_CARD_TEMPLATE.format(repo_id = args.repo_id))
 
-    api = HfApi()
+    api = HfApi(token = args.token)
     eval_report = os.path.join(args.checkpoint, "eval_report_test.json")
     api.upload_file(
         path_or_fileobj = card_path,
