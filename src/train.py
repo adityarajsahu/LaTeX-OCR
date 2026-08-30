@@ -38,6 +38,16 @@ def main():
 
     os.makedirs(cfg["output_dir"], exist_ok = True)
 
+    if "warmup_steps" in cfg:
+        warmup_steps = cfg["warmup_steps"]
+    elif "warmup_ratio" in cfg:
+        effective_batch_size = cfg["per_device_train_batch_size"] * cfg["gradient_accumulation_steps"]
+        steps_per_epoch = len(train_dataset) // effective_batch_size
+        total_steps = steps_per_epoch * cfg["num_train_epochs"]
+        warmup_steps = int(total_steps * cfg["warmup_ratio"])
+    else:
+        warmup_steps = 0
+
     training_args = TrainingArguments(
         output_dir = cfg["output_dir"],
         num_train_epochs = cfg["num_train_epochs"],
@@ -46,7 +56,7 @@ def main():
         gradient_accumulation_steps = cfg["gradient_accumulation_steps"],
         learning_rate = cfg["learning_rate"],
         weight_decay = cfg["weight_decay"],
-        warmup_ratio = cfg["warmup_ratio"],
+        warmup_steps = warmup_steps,
         lr_scheduler_type = cfg["lr_scheduler_type"],
         logging_steps = cfg["logging_steps"],
         eval_strategy = "steps",

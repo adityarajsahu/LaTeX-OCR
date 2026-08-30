@@ -2,6 +2,7 @@
 # Usage: ./scripts/train.sh [config-path]
 set -euo pipefail
 
+PYTHON="${PYTHON:-python}"
 CONFIG="${1:-config/config.yaml}"
 LOG_DIR="logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -14,7 +15,7 @@ echo "== Starting training in background (nohup) =="
 echo "Config:   $CONFIG"
 echo "Log file: $LOG_FILE"
 
-nohup python -m src.train --config "$CONFIG" > "$LOG_FILE" 2>&1 &
+nohup "$PYTHON" -m src.train --config "$CONFIG" > "$LOG_FILE" 2>&1 &
 PID=$!
 
 ln -sf "train_${TIMESTAMP}.log" "$LATEST_LOG"

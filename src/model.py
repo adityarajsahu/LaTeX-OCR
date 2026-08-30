@@ -1,25 +1,31 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
-from transformers import CLIPVisionModel, GPTNeoXForCausalLM, PretrainedConfig, PreTrainedModel
-from transformers.modeling_outputs import CausalLMOutputWithPast
+from transformers import CLIPVisionConfig, CLIPVisionModel, GPTNeoXConfig, GPTNeoXForCausalLM, PretrainedConfig, PreTrainedModel
+from transformers.utils import ModelOutput
 
 class LaTeXOCRConfig(PretrainedConfig):
     model_type = "latex_ocr"
 
-    def __init__(self, vision_model_name: str = "openai/clip-vit-base-patch32", language_model_name: str = "EleutherAI/pythia-70m", projector_hidden_dim: int = 1024, freeze_vision_model: bool = True, freeze_language_model: bool = False, **kwargs):
+    def __init__(self, vision_model_name: str = "openai/clip-vit-base-patch32", language_model_name: str = "EleutherAI/pythia-70m", projector_hidden_dim: int = 1024, freeze_vision_model: bool = True, freeze_language_model: bool = False, vocab_size: Optional[int] = None, **kwargs):
         super().__init__(**kwargs)
         self.vision_model_name = vision_model_name
         self.language_model_name = language_model_name
         self.projector_hidden_dim = projector_hidden_dim
         self.freeze_vision_model = freeze_vision_model
         self.freeze_language_model = freeze_language_model
+        self.vocab_size = vocab_size
 
 @dataclass
-class LaTeXOCROutput(CausalLMOutputWithPast):
-    num_image_tokens: int = 0
+class LaTeXOCROutput(ModelOutput):
+    loss: Optional[torch.FloatTensor] = None
+    logits: Optional[torch.FloatTensor] = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    hidden_states: Optional[Tuple[torch.FloatTensor, ...]] = None
+    attentions: Optional[Tuple[torch.FloatTensor, ...]] = None
+    num_image_tokens: Optional[int] = None
 
 class LaTeXOCRModel(PreTrainedModel):
     config_class = LaTeXOCRConfig
@@ -27,8 +33,20 @@ class LaTeXOCRModel(PreTrainedModel):
     def __init__(self, config: LaTeXOCRConfig):
         super().__init__(config)
 
-        self.vision_encoder = CLIPVisionModel.from_pretrained(config.vision_model_name, use_safetensors=True)
-        self.language_model = GPTNeoXForCausalLM.from_pretrained(config.language_model_name, use_safetensors=True)
+        lm_config = GPTNeoXConfig.from_pretrained(config.language_model_name)
+        if getattr(config, "vocab_size", None) is not None:
+            lm_config.vocab_size = config.vocab_size
+
+        try:
+            self.vision_encoder = CLIPVisionModel.from_pretrained(config.vision_model_name, use_safetensors=True)
+        except Exception:
+            vision_config = CLIPVisionConfig.from_pretrained(config.vision_model_name)
+            self.vision_encoder = CLIPVisionModel(vision_config)
+
+        try:
+            self.language_model = GPTNeoXForCausalLM.from_pretrained(config.language_model_name, config=lm_config, use_safetensors=True).to(torch.float32)
+        except Exception:
+            self.language_model = GPTNeoXForCausalLM(lm_config).to(torch.float32)
 
         vision_hidden_size = self.vision_encoder.config.hidden_size
         lm_hidden_size = self.language_model.config.hidden_size
@@ -40,6 +58,7 @@ class LaTeXOCRModel(PreTrainedModel):
         )
 
         self._apply_freezing()
+        self.post_init()
 
     def _apply_freezing(self):
         for p in self.vision_encoder.parameters():
@@ -60,6 +79,7 @@ class LaTeXOCRModel(PreTrainedModel):
     def forward(self, pixel_values: torch.Tensor, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, labels: Optional[torch.Tensor] = None, **kwargs) -> LaTeXOCROutput:
         image_embeds = self.encode_image(pixel_values)
         text_embeds = self.language_model.get_input_embeddings()(input_ids)
+        image_embeds = image_embeds.to(text_embeds.dtype)
         inputs_embeds = torch.cat([image_embeds, text_embeds], dim = 1)
 
         batch_size, num_img_tokens, _ = image_embeds.shape
@@ -91,6 +111,7 @@ class LaTeXOCRModel(PreTrainedModel):
             bos_id = tokenizer.eos_token_id
         start_ids = torch.full((batch_size, 1), bos_id, device = image_embeds.device, dtype = torch.long)
         start_embeds = self.language_model.get_input_embeddings()(start_ids)
+        image_embeds = image_embeds.to(start_embeds.dtype)
         inputs_embeds = torch.cat([image_embeds, start_embeds], dim=1)
         attention_mask = torch.ones(inputs_embeds.shape[:2], device=image_embeds.device, dtype=torch.long)
 

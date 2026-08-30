@@ -27,6 +27,8 @@ def run_evaluation(model, tokenizer, dataloader, device, max_new_tokens, num_bea
         decoded = tokenizer.batch_decode(generated_ids, skip_special_tokens = True)
         predictions.extend(normalize(p) for p in decoded)
         references.extend(normalize(t) for t in batch["text"])
+        if device == "cuda":
+            torch.cuda.empty_cache()
 
     return predictions, references
 
@@ -52,7 +54,7 @@ def main():
     parser.add_argument("--config", type = str, default = "config/config.yaml")
     parser.add_argument("--checkpoint", type = str, default = "outputs/checkpoint-best")
     parser.add_argument("--split", type = str, default = "test", choices = ["validation", "test"])
-    parser.add_argument("--batch_size", type = int, default = 16)
+    parser.add_argument("--batch_size", type = int, default = 8)
     args = parser.parse_args()
 
     cfg = load_config(args.config)

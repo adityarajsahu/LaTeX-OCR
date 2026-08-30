@@ -39,3 +39,4 @@ def build_model_config(cfg: Dict[str, Any]) -> LaTeXOCRConfig:
 
 def resize_for_added_tokens(model, tokenizer):
     model.language_model.resize_token_embeddings(len(tokenizer))
+    model.config.vocab_size = len(tokenizer)
