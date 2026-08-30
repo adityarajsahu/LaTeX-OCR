@@ -29,8 +29,8 @@ def main():
     splits = load_latex_ocr_splits(cfg["dataset_name"], cfg["val_fraction"], cfg["test_fraction"], cfg["seed"])
     print(f"[data] train={len(splits['train'])} val={len(splits['validation'])} test={len(splits['test'])}")
 
-    train_dataset = LaTeXOCRDataset(splits["train"], image_processor, tokenizer, cfg["max_text_length"])
-    eval_dataset = LaTeXOCRDataset(splits["validation"], image_processor, tokenizer, cfg["max_text_length"])
+    train_dataset = LaTeXOCRDataset(splits["train"], image_processor, tokenizer, cfg["max_text_length"], is_train = True)
+    eval_dataset = LaTeXOCRDataset(splits["validation"], image_processor, tokenizer, cfg["max_text_length"], is_train = False)
 
     model_config = build_model_config(cfg)
     model = build_model(model_config)

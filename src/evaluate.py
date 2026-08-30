@@ -22,7 +22,14 @@ def run_evaluation(model, tokenizer, dataloader, device, max_new_tokens, num_bea
 
     for batch in tqdm(dataloader, desc = "evaluating"):
         pixel_values = batch["pixel_values"].to(device)
-        generated_ids = model.generate(pixel_values = pixel_values, tokenizer = tokenizer, max_new_tokens = max_new_tokens, num_beams = num_beams)
+        generated_ids = model.generate(
+            pixel_values = pixel_values,
+            tokenizer = tokenizer,
+            max_new_tokens = max_new_tokens,
+            num_beams = num_beams,
+            repetition_penalty = 1.2,
+            no_repeat_ngram_size = 4
+        )
 
         decoded = tokenizer.batch_decode(generated_ids, skip_special_tokens = True)
         predictions.extend(normalize(p) for p in decoded)
@@ -36,7 +43,7 @@ def compute_metrics(predictions, references):
     exact_matches = sum(p == r for p, r in zip(predictions, references))
     exact_match_rate = exact_matches / len(references)
 
-    edit_distances = [Levenshtein.distance(p, r) / max(len(r), 1) for p, r in zip(predictions, references)]
+    edit_distances = [Levenshtein.distance(p, r) / max(len(p), len(r), 1) for p, r in zip(predictions, references)]
     mean_norm_edit_distance = sum(edit_distances) / len(edit_distances)
 
     smoothing = SmoothingFunction().method4

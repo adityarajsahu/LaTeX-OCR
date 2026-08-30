@@ -3,6 +3,8 @@ import torch
 from torch.utils.data import Dataset
 from datasets import load_dataset, DatasetDict
 
+from torchvision import transforms
+
 def load_latex_ocr_splits(dataset_name: str, val_fraction: float = 0.02, test_fraction: float = 0.02, seed: int = 42) -> DatasetDict:
     raw = load_dataset(dataset_name, split = "train")
     split1 = raw.train_test_split(test_size = val_fraction + test_fraction, seed = seed)
@@ -14,11 +16,20 @@ def load_latex_ocr_splits(dataset_name: str, val_fraction: float = 0.02, test_fr
     return DatasetDict(train = train_ds, validation = split2["train"], test = split2["test"])
 
 class LaTeXOCRDataset(Dataset):
-    def __init__(self, hf_split, image_processor, tokenizer, max_length: int = 256):
+    def __init__(self, hf_split, image_processor, tokenizer, max_length: int = 256, is_train: bool = False):
         self.data = hf_split
         self.image_processor = image_processor
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.is_train = is_train
+
+        if self.is_train:
+            self.transform = transforms.Compose([
+                transforms.RandomRotation(degrees=(-3, 3), fill=(255, 255, 255)),
+                transforms.ColorJitter(brightness=0.15, contrast=0.15),
+            ])
+        else:
+            self.transform = None
 
     def __len__(self):
         return len(self.data)
@@ -31,6 +42,9 @@ class LaTeXOCRDataset(Dataset):
                 example = self.data[current_idx]
                 image = example["image"].convert("RGB")
                 text = example["text"]
+
+                if self.is_train and self.transform is not None:
+                    image = self.transform(image)
 
                 pixel_values = self.image_processor(images = image, return_tensors = "pt")["pixel_values"][0]
 
