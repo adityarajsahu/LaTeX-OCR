@@ -1,11 +1,70 @@
 import argparse
 import os
 import torch
-from transformers import Trainer, TrainingArguments
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from transformers import EarlyStoppingCallback, Trainer, TrainerCallback, TrainingArguments
 
 from src.dataset import LaTeXOCRDataset, collate_fn, load_latex_ocr_splits
 from src.model import build_model
 from src.utils import build_model_config, build_tokenizer_and_processor, load_config, resize_for_added_tokens, set_seed
+
+console = Console()
+
+class LaTeXOCRProgressCallback(TrainerCallback):
+    def __init__(self, total_epochs, patience):
+        self.total_epochs = total_epochs
+        self.patience = patience
+        self.best_eval_loss = float("inf")
+        self.patience_counter = 0
+        self.latest_train_loss = None
+        self.latest_lr = None
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        console.print(Panel(
+            f"[bold cyan]🚀 Starting LaTeX-OCR Training Pipeline[/bold cyan]\n"
+            f"• [bold yellow]Max Epochs:[/bold yellow] {self.total_epochs}\n"
+            f"• [bold yellow]Early Stopping Patience:[/bold yellow] {self.patience} validation checks\n"
+            f"• [bold yellow]Total Optimizer Steps:[/bold yellow] {state.max_steps}",
+            title="[bold green]Training Configuration[/bold green]",
+            expand=False
+        ))
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if logs:
+            if "loss" in logs:
+                self.latest_train_loss = logs["loss"]
+            if "learning_rate" in logs:
+                self.latest_lr = logs["learning_rate"]
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if metrics and "eval_loss" in metrics:
+            eval_loss = metrics["eval_loss"]
+            epoch = state.epoch if state.epoch else 0.0
+            step = state.global_step
+
+            if eval_loss < self.best_eval_loss:
+                self.best_eval_loss = eval_loss
+                self.patience_counter = 0
+                status_str = f"[bold green]New Best Model! ✨ ({self.best_eval_loss:.4f})[/bold green]"
+            else:
+                self.patience_counter += 1
+                status_str = f"[bold yellow]No improvement ({self.patience_counter}/{self.patience})[/bold yellow]"
+
+            table = Table(title=f"📊 Validation Summary — Step {step}/{state.max_steps} (Epoch {epoch:.2f}/{self.total_epochs})", show_header=True, header_style="bold magenta")
+            table.add_column("Metric", style="cyan", width=25)
+            table.add_column("Value", justify="right", style="bold white")
+
+            if self.latest_train_loss is not None:
+                table.add_row("Training Loss", f"{self.latest_train_loss:.4f}")
+            table.add_row("Current Validation Loss", f"{eval_loss:.4f}")
+            table.add_row("Best Validation Loss", f"{self.best_eval_loss:.4f}")
+            if self.latest_lr is not None:
+                table.add_row("Learning Rate", f"{self.latest_lr:.2e}")
+            table.add_row("Early Stopping Status", status_str)
+
+            console.print(table)
 
 class LaTeXOCRTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs = False, **kwargs):
@@ -73,12 +132,20 @@ def main():
         remove_unused_columns = False
     )
 
+    patience = cfg.get("early_stopping_patience", 3)
+    threshold = cfg.get("early_stopping_threshold", 0.0)
+    callbacks = [
+        EarlyStoppingCallback(early_stopping_patience = patience, early_stopping_threshold = threshold),
+        LaTeXOCRProgressCallback(total_epochs = cfg["num_train_epochs"], patience = patience)
+    ]
+
     trainer = LaTeXOCRTrainer(
         model = model,
         args = training_args,
         train_dataset = train_dataset,
         eval_dataset = eval_dataset,
-        data_collator = collate_fn
+        data_collator = collate_fn,
+        callbacks = callbacks
     )
 
     trainer.train(resume_from_checkpoint = args.resume_from_checkpoint)

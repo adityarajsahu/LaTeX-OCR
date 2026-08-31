@@ -1,7 +1,7 @@
 vision_model_name: openai/clip-vit-base-patch32
-language_model_name: EleutherAI/pythia-70m
+language_model_name: EleutherAI/pythia-160m
 projector_hidden_dim: 1024
-freeze_vision_model: false
+freeze_vision_model: true
 freeze_language_model: false
 
 dataset_name: lukbl/LaTeX-OCR-dataset
@@ -11,14 +11,16 @@ max_text_length: 256
 seed: 42
 
 output_dir: outputs
-num_train_epochs: 8
-per_device_train_batch_size: 8
-per_device_eval_batch_size: 8
-gradient_accumulation_steps: 32
+num_train_epochs: 15
+per_device_train_batch_size: 4
+per_device_eval_batch_size: 4
+gradient_accumulation_steps: 64
 learning_rate: 3.0e-4
 weight_decay: 0.01
 warmup_ratio: 0.03
 lr_scheduler_type: cosine
+early_stopping_patience: 3
+early_stopping_threshold: 0.001
 logging_steps: 50
 eval_steps: 500
 save_steps: 500

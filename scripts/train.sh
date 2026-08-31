@@ -2,7 +2,8 @@
 # Usage: ./scripts/train.sh [config-path]
 set -euo pipefail
 
-PYTHON="${PYTHON:-python}"
+DEFAULT_PYTHON="/home/aditya/miniconda3/envs/torch_env/bin/python"
+PYTHON="${PYTHON:-$DEFAULT_PYTHON}"
 CONFIG="${1:-config/config.yaml}"
 LOG_DIR="logs"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
