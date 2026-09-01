@@ -5,6 +5,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from transformers import EarlyStoppingCallback, Trainer, TrainerCallback, TrainingArguments
+from transformers.trainer_callback import PrinterCallback
 
 from src.dataset import LaTeXOCRDataset, collate_fn, load_latex_ocr_splits
 from src.model import build_model
@@ -13,9 +14,10 @@ from src.utils import build_model_config, build_tokenizer_and_processor, load_co
 console = Console()
 
 class LaTeXOCRProgressCallback(TrainerCallback):
-    def __init__(self, total_epochs, patience):
+    def __init__(self, total_epochs, patience, gradient_accumulation_steps=1):
         self.total_epochs = total_epochs
         self.patience = patience
+        self.grad_accum_steps = gradient_accumulation_steps
         self.best_eval_loss = float("inf")
         self.patience_counter = 0
         self.latest_train_loss = None
@@ -26,7 +28,8 @@ class LaTeXOCRProgressCallback(TrainerCallback):
             f"[bold cyan]🚀 Starting LaTeX-OCR Training Pipeline[/bold cyan]\n"
             f"• [bold yellow]Max Epochs:[/bold yellow] {self.total_epochs}\n"
             f"• [bold yellow]Early Stopping Patience:[/bold yellow] {self.patience} validation checks\n"
-            f"• [bold yellow]Total Optimizer Steps:[/bold yellow] {state.max_steps}",
+            f"• [bold yellow]Total Optimizer Steps:[/bold yellow] {state.max_steps}\n"
+            f"• [bold yellow]Gradient Accumulation:[/bold yellow] {self.grad_accum_steps} steps",
             title="[bold green]Training Configuration[/bold green]",
             expand=False
         ))
@@ -34,7 +37,9 @@ class LaTeXOCRProgressCallback(TrainerCallback):
     def on_log(self, args, state, control, logs=None, **kwargs):
         if logs:
             if "loss" in logs:
-                self.latest_train_loss = logs["loss"]
+                # HF Trainer logs the accumulated loss (summed over grad_accum micro-batches
+                # but divided only by logging_steps). Correct it to per-sample scale.
+                self.latest_train_loss = logs["loss"] / self.grad_accum_steps
             if "learning_rate" in logs:
                 self.latest_lr = logs["learning_rate"]
 
@@ -58,7 +63,7 @@ class LaTeXOCRProgressCallback(TrainerCallback):
 
             if self.latest_train_loss is not None:
                 table.add_row("Training Loss", f"{self.latest_train_loss:.4f}")
-            table.add_row("Current Validation Loss", f"{eval_loss:.4f}")
+            table.add_row("Validation Loss", f"{eval_loss:.4f}")
             table.add_row("Best Validation Loss", f"{self.best_eval_loss:.4f}")
             if self.latest_lr is not None:
                 table.add_row("Learning Rate", f"{self.latest_lr:.2e}")
@@ -136,7 +141,7 @@ def main():
     threshold = cfg.get("early_stopping_threshold", 0.0)
     callbacks = [
         EarlyStoppingCallback(early_stopping_patience = patience, early_stopping_threshold = threshold),
-        LaTeXOCRProgressCallback(total_epochs = cfg["num_train_epochs"], patience = patience)
+        LaTeXOCRProgressCallback(total_epochs = cfg["num_train_epochs"], patience = patience, gradient_accumulation_steps = cfg["gradient_accumulation_steps"])
     ]
 
     trainer = LaTeXOCRTrainer(
@@ -147,6 +152,7 @@ def main():
         data_collator = collate_fn,
         callbacks = callbacks
     )
+    trainer.remove_callback(PrinterCallback)
 
     trainer.train(resume_from_checkpoint = args.resume_from_checkpoint)
 

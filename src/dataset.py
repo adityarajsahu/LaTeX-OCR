@@ -2,8 +2,25 @@ from typing import Dict
 import torch
 from torch.utils.data import Dataset
 from datasets import load_dataset, DatasetDict
+from PIL import Image
 
 from torchvision import transforms
+
+def pad_to_square(image: Image.Image) -> Image.Image:
+    """Pad image to square with white background, preserving aspect ratio.
+
+    LaTeX formula images are typically wide and short (e.g. 512x32).
+    CLIP's default preprocessing resizes shortest edge to 224 then center-crops
+    to 224x224, destroying 67-88% of the formula. Padding to square first
+    ensures the entire formula is visible after CLIP processing.
+    """
+    w, h = image.size
+    if w == h:
+        return image
+    max_dim = max(w, h)
+    padded = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
+    padded.paste(image, ((max_dim - w) // 2, (max_dim - h) // 2))
+    return padded
 
 def load_latex_ocr_splits(dataset_name: str, val_fraction: float = 0.02, test_fraction: float = 0.02, seed: int = 42) -> DatasetDict:
     raw = load_dataset(dataset_name, split = "train")
@@ -43,6 +60,10 @@ class LaTeXOCRDataset(Dataset):
                 image = example["image"].convert("RGB")
                 text = example["text"]
 
+                # Pad to square BEFORE augmentation and CLIP processing
+                # to preserve the entire formula width
+                image = pad_to_square(image)
+
                 if self.is_train and self.transform is not None:
                     image = self.transform(image)
 
@@ -59,6 +80,8 @@ class LaTeXOCRDataset(Dataset):
                 attention_mask = torch.tensor(attention_mask, dtype = torch.long)
                 labels = input_ids.clone()
                 labels[attention_mask == 0] = -100
+                # Mask BOS token — it's a prompt, not a prediction target
+                labels[0] = -100
 
                 return {
                     "pixel_values": pixel_values,
